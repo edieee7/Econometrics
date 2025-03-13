@@ -33,5 +33,6 @@ estat hettest
 estat imtest, white
 
 
-
 *7. If you find evidence of heteroskedasticity, find a way to address the issue and rerun regression analysis with the correction.
+
+regress n w k, robust
