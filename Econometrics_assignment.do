@@ -1,5 +1,5 @@
 *1. Describe the data 
-
+use "assignment_data_group_24.dta", clear
 des
 
 
