@@ -1,17 +1,24 @@
 *1. Describe the data 
 
-sum sector ys w k n
+des
+
 
 *2. Estimate an employment equation through an OLS regression with dependent variable n and regressors w and k. 
 
-
+reg n w k
 
 *3. Test the significance of coefficients on w and k and comment. 
+
+test w
+test k
 
 
 
 *4. By using ys and/or sectoral indicators test the null of homogeneity across sectors 
 
+regress n w k i.sector
+
+testparm i.sector
 
 *5. If you find evidence of sectoral heterogeneity, find a convenient way to accommodate it in your regression model. 
 
