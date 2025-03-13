@@ -22,6 +22,9 @@ testparm i.sector
 
 *5. If you find evidence of sectoral heterogeneity, find a convenient way to accommodate it in your regression model. 
 
+gen w_sector = w * i.sector
+gen k_sector = k * i.sector
+regress n w k w_sector k_sector i.sector
 
 
 *6. Test the null of conditional homoskedasticity and comment. 
