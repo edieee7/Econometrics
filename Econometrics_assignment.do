@@ -1,6 +1,6 @@
 *1. Describe the data 
 
-
+sum sector ys w k n
 
 *2. Estimate an employment equation through an OLS regression with dependent variable n and regressors w and k. 
 
