@@ -29,6 +29,8 @@ regress n w k w_sector k_sector i.sector
 
 *6. Test the null of conditional homoskedasticity and comment. 
 
+estat hettest
+estat imtest, white
 
 
 
