@@ -3,7 +3,6 @@ use "assignment_data_group_24.dta", clear
 des
 
 tab sector, plot sort 
-tabstat ys - n, s(mean median sd skew k range min max) 
 tabstat ys - n,  s(mean median sd skew k range min max) by (sector) columns (statistics) 
 *--------------------------------------------------------------------------------
 *2. Estimate an employment equation through an OLS regression with dependent variable n and regressors w and k. 
