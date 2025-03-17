@@ -35,14 +35,12 @@ reg n c.w##i.sector c.k##i.sector
 * BP test
 estat hettest
 
-* --> Null hypothesis is homoskedasticity
-* --> p-value was 0.4159 (lower than 0.05), meaning fail to reject H0, homoskedasticity
+* p-value was 0.4159 (lower than 0.05), meaning fail to reject H0, homoskedasticity
 
 * White test
 estat imtest, white
-*similar to BP test, but it checks if the variance of residuals depends on independent variables in a nonlinear way.
 
-* --> p-value was 0.0825, meaning fail to reject H0, homoskedasticity
+* p-value was 0.0825, meaning fail to reject H0, homoskedasticity
 
 * Graphically check
 rvfplot, yline(0)
