@@ -2,16 +2,17 @@
 use "assignment_data_group_24.dta", clear
 des
 
+tab sector, plot sort 
+tabstat ys - n, s(mean median sd skew k range min max) 
+tabstat ys - n,  s(mean median sd skew k range min max) by (sector) columns (statistics) 
 *--------------------------------------------------------------------------------
 *2. Estimate an employment equation through an OLS regression with dependent variable n and regressors w and k. 
-
 reg n w k
 *--------------------------------------------------------------------------------
 *3. Test the significance of coefficients on w and k and comment. 
 
 test w
 test k
-
 
 *--------------------------------------------------------------------------------
 *4. By using ys and/or sectoral indicators test the null of homogeneity across sectors 
