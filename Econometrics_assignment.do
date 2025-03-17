@@ -17,11 +17,18 @@ test k
 *--------------------------------------------------------------------------------
 *4. By using ys and/or sectoral indicators test the null of homogeneity across sectors 
 
-regress n w k i.sector
+* Model 1: Only ys
+reg n w k ys
+
+* Model 2: Include sector dummies
+reg n w k i.sector
 testparm i.sector
+
 *--------------------------------------------------------------------------------
 *5. If you find evidence of sectoral heterogeneity, find a convenient way to accommodate it in your regression model. 
 
+* Include interactions between sector and regressors
+reg n c.w##i.sector c.k##i.sector
 
 *-------------------------------------------------------------------------------
 *6. Test the null of conditional homoskedasticity and comment. 
