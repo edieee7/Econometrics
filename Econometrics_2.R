@@ -24,7 +24,8 @@ data <- read_csv("ireland_data.csv")
 View(data)
 # Filtering out NA, relevant years with complete inflation + regressors
 df <- subset(data,  !is.na(infl) & !is.na(unemp) & !is.na(strate))
-View(df)
+df_orig <- df  # save original filtered data
+View(df_orig)
 #########################################
 # 1. Descriptive Analysis
 #########################################
@@ -58,6 +59,41 @@ grid.arrange(p1, p2, p3, ncol = 1)
 # 2. Model Specification
 #########################################
 
+# Model 1: Static Linear Regression (OLS)
+model1 <- lm(infl ~ unemp + strate, data = df_orig)
+summary(model1)
+
+# Model 2: Dynamic with 1 lag of all variables
+df_lag <- df_orig %>%
+  mutate(
+    infl_lag1 = lag(infl, 1),
+    unemp_lag1 = lag(unemp, 1),
+    strate_lag1 = lag(strate, 1)
+  )
+
+model2 <- lm(infl ~ infl_lag1 + unemp_lag1 + strate_lag1, data = df_lag)
+summary(model2)
+
+# Later for differencing
+df <- df_orig %>% 
+  mutate(diff_infl = c(NA, diff(infl)))
+
+# Model 3 : ADL (Auto Distributed Lag) model
+df_adl <- df_orig %>%
+  mutate(
+    infl_lag1 = lag(infl, 1),
+    unemp_lag1 = lag(unemp, 1),
+    strate_lag1 = lag(strate, 1)
+  )
+
+model_adl <- lm(infl ~ infl_lag1 + unemp + unemp_lag1 + strate + strate_lag1, data = df_adl)
+summary(model_adl)
+
+# Later for differencing
+df <- df_orig %>% 
+  mutate(diff_infl = c(NA, diff(infl)))
+
+# Model 4 : ARIMA model
 #-------------------------------
 # STEP 1: Check for stationarity
 #-------------------------------
@@ -70,125 +106,84 @@ adf_result <- adf.test(df$infl)
 print(adf_result)
 # If p-value < 0.05 → Stationary; if > 0.05 → Non-stationary
 
+################################
+# Results
+################################
+# Dickey-Fuller = -2.1381  
+# Lag order = 4  
+# p-value = 0.5193  
+# since p-value is more than 0.05, we fail to reject the null hypothesis
+# Inflation based on CPI is non stationary.
+
 #-------------------------------
-# STEP 2: ACF and PACF for lag structure
+# STEP 2: ACF and PACF of original inflation
 #-------------------------------
 
 # Plot ACF and PACF to guide AR lag selection
 acf(df$infl, main = "ACF of Inflation")
 pacf(df$infl, main = "PACF of Inflation")
-# PACF cuts off at lag 2? Suggests AR(2)
+################################
+# Interpretation
+################################
+# ACF decays very slowly and this implies inflation may follow a random walk or contain a unit root. 
+# This relsult is consistent with our ADF test result and supports differencing the series before modeling.
+# Furtehrmore, in PACF, we could see the sharp drop after lag 1 or 2, then the bars become very small.
+# This is a chcharacteristic of an AR process and the PACF cutting off at lag 2 suggests that an AR(2) model 
+# (or higher) might be a good fit after differencing, or we might try an ARIMA(2,1,0).
 
 #-------------------------------
-# STEP 3: AR model comparisons using AIC
+# STEP 4: First-Difference the Inflation Series
 #-------------------------------
-
-# Try AR(1), AR(2), AR(3)
-aic1 <- AIC(arima(df$infl, order = c(1, 0, 0)))
-aic2 <- AIC(arima(df$infl, order = c(2, 0, 0)))
-aic3 <- AIC(arima(df$infl, order = c(3, 0, 0)))
-
-cat("AIC for AR(1):", aic1, "\n")
-cat("AIC for AR(2):", aic2, "\n")
-cat("AIC for AR(3):", aic3, "\n")
-# Lowest AIC = preferred model
-
-# Fit selected AR(2) model
-model_ar2 <- arima(df$infl, order = c(2, 0, 0))
-summary(model_ar2)
-
-#-------------------------------
-# STEP 4: Include Explanatory Variables (Static and Dynamic)
-#-------------------------------
-
-# Model 1: Static Linear Regression (OLS)
-model1 <- lm(infl ~ unemp + strate, data = df)
-summary(model1)
-
-# Model 2: Dynamic with 1 lag of all variables
-df_lag <- df %>%
-  mutate(
-    infl_lag1 = lag(infl, 1),
-    unemp_lag1 = lag(unemp, 1),
-    strate_lag1 = lag(strate, 1)
-  )
-
-model2 <- lm(infl ~ infl_lag1 + unemp_lag1 + strate_lag1, data = df_lag)
-summary(model2)
-
-#-------------------------------
-# STEP 5: Try ADL (Auto Distributed Lag) model
-#-------------------------------
-
-df_adl <- df %>%
-  mutate(
-    infl_lag1 = lag(infl, 1),
-    unemp_lag1 = lag(unemp, 1),
-    strate_lag1 = lag(strate, 1)
-  )
-
-model_adl <- lm(infl ~ infl_lag1 + unemp + unemp_lag1 + strate + strate_lag1, data = df_adl)
-summary(model_adl)
-
-#-------------------------------
-# STEP 6: First Differences (optional, if inflation is non-stationary)
-#-------------------------------
-
-df <- df %>%
+# Create first-differenced inflation
+df_diff <- df %>%
   mutate(diff_infl = c(NA, diff(infl)))
 
-model_diff <- lm(diff_infl ~ lag(diff_infl, 1), data = df)
-summary(model_diff)
+#-------------------------------
+# STEP 5: Re-Test Stationarity on Differenced Data
+#-------------------------------
+# ADF test on differenced inflation
+adf.test(na.omit(df_diff$diff_infl))
+################################
+# Results
+################################
+# Dickey-Fuller = -4.8859  
+# Lag order = 4  
+# p-value = 0.01 
+# since p-value is less than 0.05, we reject the null hypothesis and conclude that 
+# differenced Inflation series is now stationary.
 
 #-------------------------------
-# STEP 7: Residual Diagnostics
+# STEP 6: Plot ACF and PACF of Differenced Series
 #-------------------------------
+acf(na.omit(df$diff_infl), main = "ACF of Differenced Inflation")
+pacf(na.omit(df$diff_infl), main = "PACF of Differenced Inflation")
+################################
+# Interpretation
+################################
+# From AIC plotting, only the first lag is significantly different from 0 and it suggests a short memory process.
+# ALso, the sharp drop after lag 1 is typical of a Moving Average (MA) process and implies a MA(1) component in the model.
+# However, there were no clear strong spikes since most bars are small and inside the significance bands.
+# it Could suggest that there’s no strong AR pattern.
+# Combined with the ACF, this supports, ARIMA(0,1,1) or possibly ARIMA(1,1,1) as a comparison
 
-# ACF of residuals for AR(2) model
-acf(resid(model_ar2), main = "ACF of Residuals (AR2)")
+#-------------------------------
+# STEP 7: ARIMA model comparisons using AIC
+#-------------------------------
+model_arima011 <- arima(df$infl, order = c(0, 1, 1))  # ARIMA(0,1,1)
+model_arima111 <- arima(df$infl, order = c(1, 1, 1))  # ARIMA(1,1,1)
 
-# Ljung-Box test (for autocorrelation)
-Box.test(resid(model_ar2), lag = 10, type = "Ljung-Box")
+# Compare AIC (BIC is not aligned with our aim since we're seeking a model to forecase inflation )
+AIC(model_arima011)
+AIC(model_arima111)
+################################
+# Results
+################################
+# AIC (Akaike Information Criterion) value of ARIMA(0,1,1) was 477.2666
+# the value of ARIMA(1,1,1) was 473.4808
+# Since lower AIC value is considered as better model fit, while penalizing complexity.
+# Thus, ARIMA(1,1,1) fits the inflation data better than ARIMA(0,1,1).
 
-# Check residuals from regression models
-checkresiduals(model_ar2)
-checkresiduals(model2)
-
-
-# Model1 Static Linear Regression (OLS)
-model1<- lm(infl ~ unemp + strate, data = df)
-summary(model1)
-
-# Model2 Include Lags (Dynamic Model)
-# Start fresh: reload your filtered data
-
-df_lag <- df %>%
-  # Keep only rows where all needed variables are present
-  #filter(year >= 1970 & !is.na(infl) & !is.na(unemp) & !is.na(strate)) %>%
-  mutate(
-    infl_lag1 = lag(infl, 1),
-    unemp_lag1 = lag(unemp, 1),
-    strate_lag1 = lag(strate, 1)
-  )
-summary(df_lag)  
-
-# Now estimate the model
-model2 <- lm(infl ~ infl_lag1 + unemp_lag1 + strate_lag1, data = df_lag)
-summary(model2)
-
-
-# Model3 AR(2) model (for comparison later)
-model_ar2 <- arima(df$infl, order = c(2, 0, 0))
-model_ar2
-
-# ACF and PACF for inflation
-acf(df$infl, main = "ACF of Inflation")
-pacf(df$infl, main = "PACF of Inflation")
-
-# Compare AR models with different orders
-AIC(arima(df$infl, order = c(1,0,0)))
-AIC(arima(df$infl, order = c(2,0,0)))
-AIC(arima(df$infl, order = c(3,0,0)))
+checkresiduals(model_arima111) 
 
 ##################################################################################
 # 3. Diagnostic check
