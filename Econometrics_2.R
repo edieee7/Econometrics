@@ -19,7 +19,6 @@ library(tidyverse)
 library(lmtest)       # for bptest and Box.test
 
 # Load Ireland macro data
-setwd("/Users/edy/Downloads/Bocconi_ESS_1y_2nd/Econometrics/Part2/Assignment")
 data <- read_csv("ireland_data.csv")
 View(data)
 # Filtering out NA, relevant years with complete inflation + regressors
@@ -74,11 +73,9 @@ df_lag <- df_orig %>%
 model2 <- lm(infl ~ infl_lag1 + unemp_lag1 + strate_lag1, data = df_lag)
 summary(model2)
 
-# Later for differencing
-df <- df_orig %>% 
-  mutate(diff_infl = c(NA, diff(infl)))
-
-# Model 3 : ADL (Auto Distributed Lag) model
+#-------------------------------
+# ADL (Auto Distributed Lag) model
+#-------------------------------
 df_adl <- df_orig %>%
   mutate(
     infl_lag1 = lag(infl, 1),
@@ -90,19 +87,18 @@ model_adl <- lm(infl ~ infl_lag1 + unemp + unemp_lag1 + strate + strate_lag1, da
 summary(model_adl)
 
 # Later for differencing
-df <- df_orig %>% 
+df_diff <- df_orig %>% 
   mutate(diff_infl = c(NA, diff(infl)))
 
-# Model 4 : ARIMA model
 #-------------------------------
 # STEP 1: Check for stationarity
 #-------------------------------
 
 # Visual inspection of inflation time series
-plot(df$infl, type = "l", main = "Inflation Time Series", ylab = "Inflation Rate")
+plot(df_orig$infl, type = "l", main = "Inflation Time Series", ylab = "Inflation Rate")
 
 # ADF Test (Augmented Dickey-Fuller)
-adf_result <- adf.test(df$infl)
+adf_result <- adf.test(df_orig$infl)
 print(adf_result)
 # If p-value < 0.05 → Stationary; if > 0.05 → Non-stationary
 
@@ -120,8 +116,8 @@ print(adf_result)
 #-------------------------------
 
 # Plot ACF and PACF to guide AR lag selection
-acf(df$infl, main = "ACF of Inflation")
-pacf(df$infl, main = "PACF of Inflation")
+acf(df_orig$infl, main = "ACF of Inflation")
+pacf(df_orig$infl, main = "PACF of Inflation")
 ################################
 # Interpretation
 ################################
@@ -132,14 +128,7 @@ pacf(df$infl, main = "PACF of Inflation")
 # (or higher) might be a good fit after differencing, or we might try an ARIMA(2,1,0).
 
 #-------------------------------
-# STEP 4: First-Difference the Inflation Series
-#-------------------------------
-# Create first-differenced inflation
-df_diff <- df %>%
-  mutate(diff_infl = c(NA, diff(infl)))
-
-#-------------------------------
-# STEP 5: Re-Test Stationarity on Differenced Data
+# STEP 3: First-Difference the Inflation Series
 #-------------------------------
 # ADF test on differenced inflation
 adf.test(na.omit(df_diff$diff_infl))
@@ -155,8 +144,8 @@ adf.test(na.omit(df_diff$diff_infl))
 #-------------------------------
 # STEP 6: Plot ACF and PACF of Differenced Series
 #-------------------------------
-acf(na.omit(df$diff_infl), main = "ACF of Differenced Inflation")
-pacf(na.omit(df$diff_infl), main = "PACF of Differenced Inflation")
+acf(na.omit(df_diff$diff_infl), main = "ACF of Differenced Inflation")
+pacf(na.omit(df_diff$diff_infl), main = "PACF of Differenced Inflation")
 ################################
 # Interpretation
 ################################
@@ -169,8 +158,8 @@ pacf(na.omit(df$diff_infl), main = "PACF of Differenced Inflation")
 #-------------------------------
 # STEP 7: ARIMA model comparisons using AIC
 #-------------------------------
-model_arima011 <- arima(df$infl, order = c(0, 1, 1))  # ARIMA(0,1,1)
-model_arima111 <- arima(df$infl, order = c(1, 1, 1))  # ARIMA(1,1,1)
+model_arima011 <- arima(df_diff$infl, order = c(0, 1, 1))  # ARIMA(0,1,1)
+model_arima111 <- arima(df_diff$infl, order = c(1, 1, 1))  # ARIMA(1,1,1)
 
 # Compare AIC (BIC is not aligned with our aim since we're seeking a model to forecase inflation )
 AIC(model_arima011)
@@ -183,7 +172,7 @@ AIC(model_arima111)
 # Since lower AIC value is considered as better model fit, while penalizing complexity.
 # Thus, ARIMA(1,1,1) fits the inflation data better than ARIMA(0,1,1).
 
-checkresiduals(model_arima111) 
+checkresiduals(model_arima111)
 
 ##################################################################################
 # 3. Diagnostic check
