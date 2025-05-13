@@ -18,13 +18,15 @@ library(car)        # for vif
 library(tidyverse)
 library(lmtest)       # for bptest and Box.test
 
-# Load Ireland macro data
+#------------- Load Ireland macro data -----------
 data <- read_csv("ireland_data.csv")
 View(data)
-# Filtering out NA, relevant years with complete inflation + regressors
+
+#------------- Filtering out NA, relevant years with complete inflation + regressors -----------
 df <- subset(data,  !is.na(infl) & !is.na(unemp) & !is.na(strate))
 df_orig <- df  # save original filtered data
 View(df_orig)
+
 #########################################
 # Question 1. Descriptive Analysis
 #########################################
@@ -54,15 +56,23 @@ p3 <- ggplot(df, aes(x = year, y = strate)) +
 
 grid.arrange(p1, p2, p3, ncol = 1)
 
+#------------- Descriptive Trend ---------------
+
+# From the line plots:
+# - Inflation in Ireland was highly volatile in the 1970s and 1980s, reaching over 20%.
+# - Inflation has stabilized since the 1990s and remained below 5%.
+# - Unemployment reached its high around the 1980s and again around the 2008 crisis, before falling consistently.
+# - Short-term interest rates were high in the 1980s and have fallen consistently, reaching near zero after 2010.
+
 #########################################
 # Question 2. Model Specification
 #########################################
 
-# Model 1: Static Linear Regression (OLS)
+#------------- Model 1: Static Linear Regression (OLS) ---------------
 model1 <- lm(infl ~ unemp + strate, data = df_orig)
 summary(model1)
 
-# Model 2: Dynamic with 1 lag of all variables
+#------------- Model 2: Dynamic with 1 lag of all variables ----------
 df_lag <- df_orig %>%
   mutate(
     infl_lag1 = lag(infl, 1),
@@ -73,9 +83,9 @@ df_lag <- df_orig %>%
 model2 <- lm(infl ~ infl_lag1 + unemp_lag1 + strate_lag1, data = df_lag)
 summary(model2)
 
-#-------------------------------
-# ADL (Auto Distributed Lag) model
-#-------------------------------
+
+#------------- Model 3: ADL (Auto Distributed Lag) model -------------
+
 df_adl <- df_orig %>%
   mutate(
     infl_lag1 = lag(infl, 1),
@@ -86,6 +96,7 @@ df_adl <- df_orig %>%
 model_adl <- lm(infl ~ infl_lag1 + unemp + unemp_lag1 + strate + strate_lag1, data = df_adl)
 summary(model_adl)
 
+#------------- Model 4: ARIMA model  ----------------------------------
 # Later for differencing
 df_diff <- df_orig %>% 
   mutate(diff_infl = c(NA, diff(infl)))
@@ -102,9 +113,8 @@ adf_result <- adf.test(df_orig$infl)
 print(adf_result)
 # If p-value < 0.05 → Stationary; if > 0.05 → Non-stationary
 
-################################
-# Results
-################################
+#------------- Results ---------------
+
 # Dickey-Fuller = -2.1381  
 # Lag order = 4  
 # p-value = 0.5193  
@@ -118,9 +128,9 @@ print(adf_result)
 # Plot ACF and PACF to guide AR lag selection
 acf(df_orig$infl, main = "ACF of Inflation")
 pacf(df_orig$infl, main = "PACF of Inflation")
-################################
-# Interpretation
-################################
+
+#------------- Interpretation ---------------
+
 # ACF decays very slowly and this implies inflation may follow a random walk or contain a unit root. 
 # This relsult is consistent with our ADF test result and supports differencing the series before modeling.
 # Furtehrmore, in PACF, we could see the sharp drop after lag 1 or 2, then the bars become very small.
@@ -132,9 +142,9 @@ pacf(df_orig$infl, main = "PACF of Inflation")
 #-------------------------------
 # ADF test on differenced inflation
 adf.test(na.omit(df_diff$diff_infl))
-################################
-# Results
-################################
+
+#------------- Results ---------------
+
 # Dickey-Fuller = -4.8859  
 # Lag order = 4  
 # p-value = 0.01 
@@ -146,9 +156,9 @@ adf.test(na.omit(df_diff$diff_infl))
 #-------------------------------
 acf(na.omit(df_diff$diff_infl), main = "ACF of Differenced Inflation")
 pacf(na.omit(df_diff$diff_infl), main = "PACF of Differenced Inflation")
-################################
-# Interpretation
-################################
+
+#------------ Interpretation ---------------
+
 # From AIC plotting, only the first lag is significantly different from 0 and it suggests a short memory process.
 # ALso, the sharp drop after lag 1 is typical of a Moving Average (MA) process and implies a MA(1) component in the model.
 # However, there were no clear strong spikes since most bars are small and inside the significance bands.
@@ -164,9 +174,9 @@ model_arima111 <- arima(df_diff$infl, order = c(1, 1, 1))  # ARIMA(1,1,1)
 # Compare AIC (BIC is not aligned with our aim since we're seeking a model to forecase inflation )
 AIC(model_arima011)
 AIC(model_arima111)
-################################
-# Results
-################################
+
+#------------ Results ---------------
+
 # AIC (Akaike Information Criterion) value of ARIMA(0,1,1) was 477.2666
 # the value of ARIMA(1,1,1) was 473.4808
 # Since lower AIC value is considered as better model fit, while penalizing complexity.
@@ -183,7 +193,7 @@ AIC(model_arima111)
 # 'model_arima111' (ARIMA(1,1,1)) is our preferred model from Question 2
 
 #-------------------------------
-# 1. Residual diagnostics (checkresiduals)
+# Step 1. Residual diagnostics (checkresiduals)
 #-------------------------------
 checkresiduals(model_arima111)
 # Includes: ACF plot, residual time series plot, histogram + Ljung-Box test
@@ -192,28 +202,28 @@ checkresiduals(model_arima111)
 
 
 #-------------------------------
-# 2. ACF of residuals (manual check)
+# Step 2. ACF of residuals (manual check)
 #-------------------------------
 acf(resid(model_arima111), main = "ACF of Residuals (ARIMA(1,1,1))")
 # The bars are inside the blue bands which means residuals have no significant autocorrelation
 
 #-------------------------------
-# 4. Normality of residuals
+# Step 3. Normality of residuals
 #-------------------------------
 hist(resid(model_arima111), main = "Histogram of Residuals", xlab = "Residuals")
 shapiro.test(resid(model_arima111))
 
-################################
-# Interpretation
-################################
+
+#------------- Interpretation
+
 # The residual histogram appears approximately normal with mild right-skewness and one outlier, 
 # consistent with the Shapiro-Wilk test result (p = 0.01064). 
 # However, the distribution is close enough to normal for ARIMA forecasting purposes, and does not invalidate the model.
 
 
-################################
-# Final conclusion
-################################
+
+#------------- Final conclusion ---------------
+
 # ARIMA(1,1,1) passes all residual checks:
 # - Residuals are not autocorrelated (ACF + Ljung-Box)
 # - Residuals are approximately normal (histogram + Shapiro)
