@@ -333,3 +333,155 @@ cat("AR(2) Model - MAE:", mae_ar2, " RMSE:", rmse_ar2, "\n")
 
 
 
+
+
+
+
+
+
+#### New code with comments
+
+###Step 1: Identify forecast period
+
+# Keep only complete observations (no NAs)
+df_clean <- na.omit(df_orig)
+
+# Identify the last 10 years of data
+n <- nrow(df_clean)
+forecast_years <- df_clean$year[(n-9):n]
+print(forecast_years)
+
+###Step 2: Rolling 1-step ahead forecasts with ARIMA(1,1,1)
+
+
+  # Ensure df_clean is defined and has enough data
+  df_clean <- df_orig  # or use your filtered df
+  n <- nrow(df_clean)  # total number of observations
+  
+  # Sanity check
+  if (n < 20) stop("Not enough data for a 10-year rolling forecast.")
+  
+  # Identify last 10 years
+  forecast_years <- df_clean$year[(n - 9):n]
+  actual <- df_clean$infl[(n - 9):n]
+  
+  # Empty vector to store forecasts
+  forecast_arima <- numeric(10)
+  
+  # Rolling 1-step ahead ARIMA(1,1,1) forecast
+  for (i in 1:10) {
+    train_end <- n - 10 + (i - 1)
+    train_data <- df_clean$infl[1:train_end]
+    
+    model <- arima(train_data, order = c(1, 1, 1))
+    forecast_result <- predict(model, n.ahead = 1)
+    forecast_arima[i] <- forecast_result$pred
+  }
+  
+  # Results
+  results_arima <- data.frame(
+    Year = forecast_years,
+    Actual = actual,
+    Forecast = forecast_arima,
+    Error = actual - forecast_arima
+  )
+  print(results_arima)
+  
+###Step 3: Perform the same rolling 1-step ahead forecast using the AR(2) model
+
+  # Initialize vector for AR(2) forecasts
+  forecast_ar2 <- numeric(10)
+  
+  # Rolling 1-step ahead AR(2) forecast
+  for (i in 1:10) {
+    train_end <- n - 10 + (i - 1)
+    train_data <- df_clean$infl[1:train_end]
+    
+    model_ar2 <- arima(train_data, order = c(2, 0, 0))  # AR(2) model
+    forecast_result_ar2 <- predict(model_ar2, n.ahead = 1)
+    forecast_ar2[i] <- forecast_result_ar2$pred
+  }
+  
+  # Results for AR(2)
+  results_ar2 <- data.frame(
+    Year = forecast_years,
+    Actual = actual,
+    Forecast = forecast_ar2,
+    Error = actual - forecast_ar2
+  )
+  
+  print(results_ar2)
+  
+  # Step 4: Compare Forecast Accuracy of ARIMA(1,1,1) and AR(2) Models
+  
+  # Calculate RMSE and MAE for ARIMA(1,1,1)
+  rmse_arima <- sqrt(mean((results_arima$Actual - results_arima$Forecast)^2))
+  mae_arima <- mean(abs(results_arima$Actual - results_arima$Forecast))
+  
+  # Calculate RMSE and MAE for AR(2)
+  rmse_ar2 <- sqrt(mean((results_ar2$Actual - results_ar2$Forecast)^2))
+  mae_ar2 <- mean(abs(results_ar2$Actual - results_ar2$Forecast))
+  
+  # Create a summary table
+  accuracy_comparison <- data.frame(
+    Model = c("ARIMA(1,1,1)", "AR(2)"),
+    RMSE = c(rmse_arima, rmse_ar2),
+    MAE = c(mae_arima, mae_ar2)
+  )
+  
+  # Print with title
+  cat("\nForecast Accuracy Comparison (RMSE and MAE):\n")
+  print(accuracy_comparison)
+  
+
+  #Just to get information for the comments
+  
+  print(model_arima111)
+  
+  summary(model_ar2)
+
+  # -------------------------------------------------------------------------
+  # Forecast Construction and Comparison
+  # -------------------------------------------------------------------------
+  # Using the preferred ARIMA(1,1,1) model, with estimated parameters 
+  # ar1 = -0.2671 (s.e. 0.3302) and ma1 = 0.5356 (s.e. 0.2843), we constructed 
+  # 1-step ahead point forecasts for the last 10 years of the sample. This rolling 
+  # forecast procedure involved re-estimating the model each year using all data 
+  # up to that year, ensuring that the model adapted over time. 
+  #
+  # For comparison, forecasts were also generated from an AR(2) model estimated 
+  # on the original inflation series, which had parameter estimates ar1 = 1.1068 
+  # (s.e. 0.1211) and ar2 = -0.2731 (s.e. 0.1209), with an intercept of 4.6623.
+  #
+  # Evaluating forecast accuracy over the last decade:
+  # - The AR(2) model achieved a slightly lower RMSE of 2.31 compared to 2.34 for 
+  #   the ARIMA(1,1,1) model, suggesting marginally better fit in terms of squared errors.
+  # - However, the ARIMA(1,1,1) model outperformed in terms of MAE (1.74 vs. 1.81), 
+  #   indicating better median forecast accuracy.
+  #
+  # The ARIMA model’s differencing step addresses the non-stationarity found in 
+  # the inflation series, supporting its theoretical suitability despite the AR(2) 
+  # model’s competitive performance.
+  #
+  # In conclusion, while both models exhibit similar forecasting capabilities for 
+  # inflation in Ireland, the ARIMA(1,1,1) model provides a more theoretically sound 
+  # framework by accounting for unit roots and integrating autoregressive and moving 
+  # average components, justifying its role as the preferred forecasting model.
+  # -------------------------------------------------------------------------
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
