@@ -1,12 +1,12 @@
 #########################################
 # Load and prepare data
 #########################################
-install.packages("readr")
-install.packages("forecast", type = "binary")
-install.packages("tseries", type = "binary")
-install.packages("gridExtra")
-install.packages("dplyr")
-install.packages("car", type = "binary")
+# install.packages("readr")
+# install.packages("forecast", type = "binary")
+# install.packages("tseries", type = "binary")
+# install.packages("gridExtra")
+# install.packages("dplyr")
+# install.packages("car", type = "binary")
 
 library(readr)
 library(forecast)   # for ARIMA, diagnostics
@@ -17,6 +17,7 @@ library(ggplot2)
 library(car)        # for vif
 library(tidyverse)
 library(lmtest)       # for bptest and Box.test
+library(scales)
 
 #------------- Load Ireland macro data -----------
 data <- read_csv("ireland_data.csv")
@@ -25,35 +26,44 @@ View(data)
 #------------- Filtering out NA, relevant years with complete inflation + regressors -----------
 df <- subset(data,  !is.na(infl) & !is.na(unemp) & !is.na(strate))
 df_orig <- df  # save original filtered data
-View(df_orig)
+
+
 
 #########################################
 # Question 1. Descriptive Analysis
 #########################################
 summary(df[, c("year", "infl", "unemp", "strate")])
 
+# Descriptive Plots for Inflation, Unemployment, and Interest Rate in Ireland
+
+# Ensure 'year' is in Date format
+df_orig$Year <- as.Date(paste0(df$year, "-01-01"))
+
 # Plot inflation
-p1 <- ggplot(df, aes(x = year, y = infl)) + 
+p1 <- ggplot(df, aes(x = Year, y = infl)) + 
   geom_line(color = "darkred") + 
   ggtitle("Inflation Rate in Ireland (YoY)") +
-  ylab("Inflation (%)") + xlab("Year")
-
-print(p1)
+  ylab("Inflation (%)") + xlab("Year") +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  theme_minimal()
 
 # Plot unemployment
-p2 <- ggplot(df, aes(x = year, y = unemp)) + 
+p2 <- ggplot(df, aes(x = Year, y = unemp)) + 
   geom_line(color = "steelblue") +
   ggtitle("Unemployment Rate in Ireland") +
-  ylab("%") + xlab("Year")
-
-print(p2)
+  ylab("Unemployment Rate (%)") + xlab("Year") +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  theme_minimal()
 
 # Plot interest rate
-p3 <- ggplot(df, aes(x = year, y = strate)) + 
+p3 <- ggplot(df, aes(x = Year, y = strate)) + 
   geom_line(color = "darkgreen") +
   ggtitle("Short-Term Interest Rate in Ireland") +
-  ylab("%") + xlab("Year")
+  ylab("ST Interest Rate (%)") + xlab("Year") +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  theme_minimal()
 
+# Arrange plots vertically
 grid.arrange(p1, p2, p3, ncol = 1)
 
 #------------- Descriptive Trend ---------------
@@ -63,6 +73,8 @@ grid.arrange(p1, p2, p3, ncol = 1)
 # - Inflation has stabilized since the 1990s and remained below 5%.
 # - Unemployment reached its high around the 1980s and again around the 2008 crisis, before falling consistently.
 # - Short-term interest rates were high in the 1980s and have fallen consistently, reaching near zero after 2010.
+
+
 
 #########################################
 # Question 2. Model Specification
@@ -182,6 +194,10 @@ AIC(model_arima111)
 # Since lower AIC value is considered as better model fit, while penalizing complexity.
 # Thus, ARIMA(1,1,1) fits the inflation data better than ARIMA(0,1,1).
 
+summary(model_arima111)
+
+
+
 ##################################################################################
 # Question 3. Diagnostic check
 # Purpose : Test if the model satisfies the assumptions for time series models
@@ -214,13 +230,11 @@ hist(resid(model_arima111), main = "Histogram of Residuals", xlab = "Residuals")
 shapiro.test(resid(model_arima111))
 
 
-#------------- Interpretation
+#------------- Interpretation 
 
 # The residual histogram appears approximately normal with mild right-skewness and one outlier, 
 # consistent with the Shapiro-Wilk test result (p = 0.01064). 
 # However, the distribution is close enough to normal for ARIMA forecasting purposes, and does not invalidate the model.
-
-
 
 #------------- Final conclusion ---------------
 
@@ -230,118 +244,15 @@ shapiro.test(resid(model_arima111))
 # - Model is valid for forecasting inflation
 
 
-##############
 
-# 5.Construct and evaluate 1-step ahead point forecasts for the last 10 years of the sample.
-# 6.Compare your forecasts with those resulting from an AR (2) model.
+##################################################################################
+# Question 5. Forecast
+# Construct and evaluate 1-step ahead point forecasts for the last 10 years of the sample.
+##################################################################################
 
-##############
-
-# From previous analysis we assume that model2 is our preffered model
-
-#####
-#Step 1: Create rolling 1-step ahead forecasts (last 10 years) using your preferred model
-#####
-
-# Sort data just in case
-
-df_lag <- df_lag[order(df_lag$year), ]
-
-# Remove NAs due to lags
-df_lag <- df_lag %>% filter(!is.na(infl_lag1) & !is.na(unemp_lag1) & !is.na(strate_lag1))
-
-# Store forecasted vs actual values
-n <- 10
-n_total <- nrow(df_lag)
-forecasts_model2 <- numeric(n)
-actuals <- df_lag$infl[(n_total - n + 1):n_total]
-
-# Rolling forecast: fit model on expanding window
-for (i in 1:n) {
-  train_end <- n_total - n + i - 1
-  train_data <- df_lag[1:train_end, ]
-  
-  model_temp <- lm(infl ~ infl_lag1 + unemp_lag1 + strate_lag1, data = train_data)
-  
-  newdata <- df_lag[train_end + 1, ]
-  forecasts_model2[i] <- predict(model_temp, newdata = newdata)
-}
- 
-
-#####
-#Step 2: Do the same for the AR(2) model
-#####
-
-forecasts_ar2 <- numeric(n)
-
-for (i in 1:n) {
-  train_end <- n_total - n + i - 1
-  train_data <- df_lag$infl[1:train_end]
-  
-  model_ar_temp <- arima(train_data, order = c(2, 0, 0))
-  forecasts_ar2[i] <- forecast(model_ar_temp, h = 1)$mean
-}
-
-####
-#Step 3: Compare forecast performance
-####
-
-mae_model2 <- mean(abs(forecasts_model2 - actuals))
-mae_ar2 <- mean(abs(forecasts_ar2 - actuals))
-
-rmse_model2 <- sqrt(mean((forecasts_model2 - actuals)^2))
-rmse_ar2 <- sqrt(mean((forecasts_ar2 - actuals)^2))
-
-cat("Model 2 - MAE:", mae_model2, " RMSE:", rmse_model2, "\n")
-cat("AR(2) Model - MAE:", mae_ar2, " RMSE:", rmse_ar2, "\n")
-
-####
-#Step 4: Visual comparison
-####
-
-years_test <- df_lag$year[(n_total - n + 1):n_total]
-df_forecasts <- data.frame(
-  Year = years_test,
-  Actual = actuals,
-  Model2 = forecasts_model2,
-  AR2 = forecasts_ar2
-)
-
-ggplot(df_forecasts, aes(x = Year)) +
-  geom_line(aes(y = Actual, color = "Actual")) +
-  geom_line(aes(y = Model2, color = "Model 2 (Dynamic)")) +
-  geom_line(aes(y = AR2, color = "AR(2)")) +
-  labs(title = "1-Step Ahead Forecasts: Last 10 Years",
-       y = "Inflation Rate (%)", color = "Legend") +
-  theme_minimal()
-
-#Used for comparing forecasts
-
-mae_model2 <- mean(abs(forecasts_model2 - actuals))
-rmse_model2 <- sqrt(mean((forecasts_model2 - actuals)^2))
-
-mae_ar2 <- mean(abs(forecasts_ar2 - actuals))
-rmse_ar2 <- sqrt(mean((forecasts_ar2 - actuals)^2))
-
-# Print
-cat("Model 2 - MAE:", mae_model2, " RMSE:", rmse_model2, "\n")
-cat("AR(2) Model - MAE:", mae_ar2, " RMSE:", rmse_ar2, "\n")
-
-#Comment on model comparison 
-
-#To evaluate forecasting performance, we compared 1-step ahead predictions from two models: a dynamic regression model (model 2) and an AR(2) model. Using data from the last 10 years of the sample, we computed standard forecast accuracy metrics. Model 2 yielded a Mean Absolute Error (MAE) of 1.69 and a Root Mean Squared Error (RMSE) of 2.47, while the AR(2) model had a slightly lower RMSE of 2.31 but a higher MAE of 1.83. This suggests that although the AR(2) model performs slightly better in penalizing large forecast errors (lower RMSE), the dynamic regression model produces more accurate forecasts on average (lower MAE). Depending on the chosen loss function, model 2 may be preferred due to its ability to better capture average forecast behavior, especially given its use of relevant macroeconomic predictors (lagged unemployment and interest rates) that provide additional explanatory power.
-
-
-
-
-
-
-
-
-
-#### New code with comments
-
-###Step 1: Identify forecast period
+#-------------------------------
+# Step 1. Identify forecast period
+#-------------------------------
 
 # Keep only complete observations (no NAs)
 df_clean <- na.omit(df_orig)
@@ -351,137 +262,152 @@ n <- nrow(df_clean)
 forecast_years <- df_clean$year[(n-9):n]
 print(forecast_years)
 
-###Step 2: Rolling 1-step ahead forecasts with ARIMA(1,1,1)
+#-------------------------------
+# Step 2. Rolling 1-step ahead forecasts with ARIMA(1,1,1)
+#-------------------------------
 
+# Ensure df_clean is defined and has enough data
+df_clean <- df_orig  # or use your filtered df
+n <- nrow(df_clean)  # total number of observations
 
-  # Ensure df_clean is defined and has enough data
-  df_clean <- df_orig  # or use your filtered df
-  n <- nrow(df_clean)  # total number of observations
+# Sanity check
+if (n < 20) stop("Not enough data for a 10-year rolling forecast.")
+
+# Identify last 10 years
+forecast_years <- df_clean$year[(n - 9):n]
+actual <- df_clean$infl[(n - 9):n]
+
+# Empty vector to store forecasts
+forecast_arima <- numeric(10)
+
+# Rolling 1-step ahead ARIMA(1,1,1) forecast
+for (i in 1:10) {
+  train_end <- n - 10 + (i - 1)
+  train_data <- df_clean$infl[1:train_end]
   
-  # Sanity check
-  if (n < 20) stop("Not enough data for a 10-year rolling forecast.")
+  model <- arima(train_data, order = c(1, 1, 1))
+  forecast_result <- predict(model, n.ahead = 1)
+  forecast_arima[i] <- forecast_result$pred
+}
+
+# Results
+results_arima <- data.frame(
+  Year = forecast_years,
+  Actual = actual,
+  Forecast = forecast_arima,
+  Error = actual - forecast_arima
+)
+print(results_arima)
+
+
+
+##################################################################################
+# Question 6. Comparison
+# Compare your forecasts with those resulting from an AR (2) model.
+##################################################################################
+
+#-------------------------------
+# Step 1. Perform the same rolling 1-step ahead forecast using the AR(2) model
+#-------------------------------  
+
+# Initialize vector for AR(2) forecasts
+forecast_ar2 <- numeric(10)
+
+# Rolling 1-step ahead AR(2) forecast
+for (i in 1:10) {
+  train_end <- n - 10 + (i - 1)
+  train_data <- df_clean$infl[1:train_end]
   
-  # Identify last 10 years
-  forecast_years <- df_clean$year[(n - 9):n]
-  actual <- df_clean$infl[(n - 9):n]
-  
-  # Empty vector to store forecasts
-  forecast_arima <- numeric(10)
-  
-  # Rolling 1-step ahead ARIMA(1,1,1) forecast
-  for (i in 1:10) {
-    train_end <- n - 10 + (i - 1)
-    train_data <- df_clean$infl[1:train_end]
-    
-    model <- arima(train_data, order = c(1, 1, 1))
-    forecast_result <- predict(model, n.ahead = 1)
-    forecast_arima[i] <- forecast_result$pred
-  }
-  
-  # Results
-  results_arima <- data.frame(
-    Year = forecast_years,
-    Actual = actual,
-    Forecast = forecast_arima,
-    Error = actual - forecast_arima
-  )
-  print(results_arima)
-  
-###Step 3: Perform the same rolling 1-step ahead forecast using the AR(2) model
+  model_ar2 <- arima(train_data, order = c(2, 0, 0))  # AR(2) model
+  forecast_result_ar2 <- predict(model_ar2, n.ahead = 1)
+  forecast_ar2[i] <- forecast_result_ar2$pred
+}
 
-  # Initialize vector for AR(2) forecasts
-  forecast_ar2 <- numeric(10)
-  
-  # Rolling 1-step ahead AR(2) forecast
-  for (i in 1:10) {
-    train_end <- n - 10 + (i - 1)
-    train_data <- df_clean$infl[1:train_end]
-    
-    model_ar2 <- arima(train_data, order = c(2, 0, 0))  # AR(2) model
-    forecast_result_ar2 <- predict(model_ar2, n.ahead = 1)
-    forecast_ar2[i] <- forecast_result_ar2$pred
-  }
-  
-  # Results for AR(2)
-  results_ar2 <- data.frame(
-    Year = forecast_years,
-    Actual = actual,
-    Forecast = forecast_ar2,
-    Error = actual - forecast_ar2
-  )
-  
-  print(results_ar2)
-  
-  # Step 4: Compare Forecast Accuracy of ARIMA(1,1,1) and AR(2) Models
-  
-  # Calculate RMSE and MAE for ARIMA(1,1,1)
-  rmse_arima <- sqrt(mean((results_arima$Actual - results_arima$Forecast)^2))
-  mae_arima <- mean(abs(results_arima$Actual - results_arima$Forecast))
-  
-  # Calculate RMSE and MAE for AR(2)
-  rmse_ar2 <- sqrt(mean((results_ar2$Actual - results_ar2$Forecast)^2))
-  mae_ar2 <- mean(abs(results_ar2$Actual - results_ar2$Forecast))
-  
-  # Create a summary table
-  accuracy_comparison <- data.frame(
-    Model = c("ARIMA(1,1,1)", "AR(2)"),
-    RMSE = c(rmse_arima, rmse_ar2),
-    MAE = c(mae_arima, mae_ar2)
-  )
-  
-  # Print with title
-  cat("\nForecast Accuracy Comparison (RMSE and MAE):\n")
-  print(accuracy_comparison)
-  
+# Results for AR(2)
+results_ar2 <- data.frame(
+  Year = forecast_years,
+  Actual = actual,
+  Forecast = forecast_ar2,
+  Error = actual - forecast_ar2
+)
 
-  #Just to get information for the comments
-  
-  print(model_arima111)
-  
-  summary(model_ar2)
+print(results_ar2)
 
-  # -------------------------------------------------------------------------
-  # Forecast Construction and Comparison
-  # -------------------------------------------------------------------------
-  # Using the preferred ARIMA(1,1,1) model, with estimated parameters 
-  # ar1 = -0.2671 (s.e. 0.3302) and ma1 = 0.5356 (s.e. 0.2843), we constructed 
-  # 1-step ahead point forecasts for the last 10 years of the sample. This rolling 
-  # forecast procedure involved re-estimating the model each year using all data 
-  # up to that year, ensuring that the model adapted over time. 
-  #
-  # For comparison, forecasts were also generated from an AR(2) model estimated 
-  # on the original inflation series, which had parameter estimates ar1 = 1.1068 
-  # (s.e. 0.1211) and ar2 = -0.2731 (s.e. 0.1209), with an intercept of 4.6623.
-  #
-  # Evaluating forecast accuracy over the last decade:
-  # - The AR(2) model achieved a slightly lower RMSE of 2.31 compared to 2.34 for 
-  #   the ARIMA(1,1,1) model, suggesting marginally better fit in terms of squared errors.
-  # - However, the ARIMA(1,1,1) model outperformed in terms of MAE (1.74 vs. 1.81), 
-  #   indicating better median forecast accuracy.
-  #
-  # The ARIMA model’s differencing step addresses the non-stationarity found in 
-  # the inflation series, supporting its theoretical suitability despite the AR(2) 
-  # model’s competitive performance.
-  #
-  # In conclusion, while both models exhibit similar forecasting capabilities for 
-  # inflation in Ireland, the ARIMA(1,1,1) model provides a more theoretically sound 
-  # framework by accounting for unit roots and integrating autoregressive and moving 
-  # average components, justifying its role as the preferred forecasting model.
-  # -------------------------------------------------------------------------
-  
+#-------------------------------
+# Step 2. Compare Forecast Accuracy of ARIMA(1,1,1) and AR(2) Models
+#-------------------------------  
+
+# Calculate RMSE and MAE for ARIMA(1,1,1)
+rmse_arima <- sqrt(mean((results_arima$Actual - results_arima$Forecast)^2))
+mae_arima <- mean(abs(results_arima$Actual - results_arima$Forecast))
+
+# Calculate RMSE and MAE for AR(2)
+rmse_ar2 <- sqrt(mean((results_ar2$Actual - results_ar2$Forecast)^2))
+mae_ar2 <- mean(abs(results_ar2$Actual - results_ar2$Forecast))
+
+# Create a summary table
+accuracy_comparison <- data.frame(
+  Model = c("ARIMA(1,1,1)", "AR(2)"),
+  RMSE = c(rmse_arima, rmse_ar2),
+  MAE = c(mae_arima, mae_ar2)
+)
+
+# Print with title
+cat("\nForecast Accuracy Comparison (RMSE and MAE):\n")
+print(accuracy_comparison)
 
 
+# Comparison Plot for ARIMA(1,1,1) and AR(2) Forecasts vs Actual
+
+library(ggplot2)
+library(scales)  # for better date formatting if needed
+
+# Combine results for plotting with proper date formatting
+results_combined <- data.frame(
+  Year = as.Date(paste0(forecast_years, "-01-01")),
+  Value = c(actual, results_arima$Forecast, results_ar2$Forecast),
+  Series = rep(c("Actual", "ARIMA(1,1,1)", "AR(2)"), each = 10)
+)
+
+# Create line plot
+comparison_plot <- ggplot(results_combined, aes(x = Year, y = Value, color = Series, linetype = Series)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  ggtitle("Forecast Comparison: ARIMA(1,1,1) vs AR(2)") +
+  ylab("Inflation Rate (%)") +
+  xlab("Year") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  theme_minimal()
+
+# Show plot
+print(comparison_plot)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+# -------------------------------------------------------------------------
+# Forecast Construction and Comparison
+# -------------------------------------------------------------------------
+# Using the preferred ARIMA(1,1,1) model, with estimated parameters 
+# ar1 = -0.2671 (s.e. 0.3302) and ma1 = 0.5356 (s.e. 0.2843), we constructed 
+# 1-step ahead point forecasts for the last 10 years of the sample. This rolling 
+# forecast procedure involved re-estimating the model each year using all data 
+# up to that year, ensuring that the model adapted over time. 
+#
+# For comparison, forecasts were also generated from an AR(2) model estimated 
+# on the original inflation series, which had parameter estimates ar1 = 1.1068 
+# (s.e. 0.1211) and ar2 = -0.2731 (s.e. 0.1209), with an intercept of 4.6623.
+#
+# Evaluating forecast accuracy over the last decade:
+# - The AR(2) model achieved a slightly lower RMSE of 2.31 compared to 2.34 for 
+#   the ARIMA(1,1,1) model, suggesting marginally better fit in terms of squared errors.
+# - However, the ARIMA(1,1,1) model outperformed in terms of MAE (1.74 vs. 1.81), 
+#   indicating better median forecast accuracy.
+#
+# The ARIMA model’s differencing step addresses the non-stationarity found in 
+# the inflation series, supporting its theoretical suitability despite the AR(2) 
+# model’s competitive performance.
+#
+# In conclusion, while both models exhibit similar forecasting capabilities for 
+# inflation in Ireland, the ARIMA(1,1,1) model provides a more theoretically sound 
+# framework by accounting for unit roots and integrating autoregressive and moving 
+# average components, justifying its role as the preferred forecasting model.
+# -------------------------------------------------------------------------
